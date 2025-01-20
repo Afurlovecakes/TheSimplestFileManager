@@ -100,10 +100,10 @@ public:
             std::cout << "Source not found: " << source << std::endl;
         }
     }
-    uintmax_t calculateSize(const std::string& name) {
+    uintmax_t calcSize(const std::string& name) {
         if (fs::exists(name)) {
             if (fs::is_directory(name)) {
-                return getDirectorySize(name);
+                return getDirSize(name);
             }
             else {
                 return fs::file_size(name);
@@ -153,7 +153,7 @@ public:
         }
     }
 private:
-    uintmax_t getDirectorySize(const std::string& path) const {
+    uintmax_t getDirSize(const std::string& path) const {
         uintmax_t size = 0;
         for (const auto& entry : fs::recursive_directory_iterator(path)) {
             if (fs::is_regular_file(entry.status())) {
@@ -226,7 +226,7 @@ int main() {
             break;
         case 8:
             name = getInput("Enter name to calculate size: ");
-            std::cout << "Size: " << fm.calculateSize(name) << " bytes" << std::endl;
+            std::cout << "Size: " << fm.calcSize(name) << " bytes" << std::endl;
             break;
         case 9:
             pattern = getInput("Enter search pattern: ");
