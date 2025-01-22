@@ -5,6 +5,9 @@
 #include <fstream>
 #include <regex>
 #include <limits>
+#include <thread>
+#include <atomic>
+#include <chrono>
 
 namespace fs = std::filesystem;
 
@@ -117,37 +120,66 @@ public:
     void search(const std::string& pattern, const std::string& path) {
         try {
             if (fs::exists(path) && fs::is_directory(path)) {
-                std::regex re(pattern);
-                std::cout << "Searching for '" << pattern << "' in path: " << path << std::endl;
-                for (const auto& entry : fs::recursive_directory_iterator(path)) {
-                    std::cout << "Checking: " << entry.path().filename().string() << std::endl;
-                    try {
-                        if (std::regex_search(entry.path().filename().string(), re)) {
-                            std::cout << "Match found: " << entry.path().string() << std::endl;
+                std::string regexPattern = convertMaskToRegex(pattern);
+                std::regex re(regexPattern);
+
+                // Атомарный флаг для управления потоком анимации
+                std::atomic<bool> searching(true);
+
+                // Animation thread
+                std::thread animationThread([&searching]() {
+                    const char anim[] = { '|', '/', '-', '\\' };
+                    int i = 0;
+                    while (searching) {
+                        std::cout << "\rSearching " << anim[i] << " ";
+                        std::cout.flush();
+                        i = (i + 1) % 4;
+                        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    }
+                    });
+
+                try {
+                    std::cout << "\nSearching for '" << pattern << "' in path: " << path << std::endl;
+                    for (const auto& entry : fs::recursive_directory_iterator(path)) {
+                        std::string filename = entry.path().filename().string();
+                        try {
+                            if (std::regex_match(filename, re)) {
+                                std::cout << "\rMatch found: " << entry.path().string() << std::endl;
+                            }
+                        }
+                        catch (const std::regex_error& e) {
+                            std::cout << "Regex error: \n" << e.what() << std::endl;
+                            break;
                         }
                     }
-                    catch (const std::regex_error& e) {
-                        std::cout << "Regex error: " << e.what() << std::endl;
-                        break;
-                    }
                 }
+                catch (...) {
+                    searching = false;
+                    animationThread.join();
+                    throw;
+                }
+
+                // Конец анимации
+                searching = false;
+                animationThread.join();
+                std::cout << "\rSearch complete.            \n" << std::endl;
             }
             else {
-                std::cout << "Invalid path: " << path << std::endl;
+                std::cout << "Invalid path: \n" << path << std::endl;
             }
         }
         catch (const std::filesystem::filesystem_error& e) {
-            std::cout << "Filesystem error: " << e.what() << std::endl;
+            std::cout << "Filesystem error: \n" << e.what() << std::endl;
         }
         catch (const std::regex_error& e) {
-            std::cout << "Regex error: " << e.what() << std::endl;
+            std::cout << "Regex error: \n" << e.what() << std::endl;
         }
         catch (...) {
-            std::cout << "An unknown error occurred." << std::endl;
+            std::cout << "An unknown error occurred.\n" << std::endl;
         }
     }
     void displayContents() const {
-        std::cout << "File Manager Contents: " << std::endl;
+        std::cout << "File Manager Contents: \n" << std::endl;
         for (const auto& entry : fs::directory_iterator(".")) {
             std::cout << entry.path().string() << std::endl;
         }
@@ -161,6 +193,43 @@ private:
             }
         }
         return size;
+    }
+
+    std::string convertMaskToRegex(const std::string& mask) const {
+        std::string regexStr;
+        regexStr += '^'; // Начало строки
+        for (char c : mask) {
+            switch (c) {
+            case '*':
+                regexStr += ".*";
+                break;
+            case '?':
+                regexStr += '.';
+                break;
+            case '.':
+                regexStr += "\\.";
+                break;
+            case '\\':
+            case '+':
+            case '^':
+            case '$':
+            case '|':
+            case '{':
+            case '}':
+            case '(':
+            case ')':
+            case '[':
+            case ']':
+                regexStr += '\\';
+                regexStr += c;
+                break;
+            default:
+                regexStr += c;
+                break;
+            }
+        }
+        regexStr += '$'; // Конец строки
+        return regexStr;
     }
 };
 
@@ -192,7 +261,7 @@ int main() {
     do {
         displayMenu();
         std::cin >> choice;
-        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n'); // Очистить буфер ввода после выбора чтения
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         switch (choice) {
         case 1:
             fm.displayContents();
